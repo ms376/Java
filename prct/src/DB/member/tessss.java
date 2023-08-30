@@ -1,0 +1,46 @@
+package DB.member;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Scanner;
+
+class Javaex25
+{
+	public static void main(String[] args) 
+	{
+		HashMap<String, String> map = new HashMap<String, String>();
+		
+		MemberDAO dao = new MemberDAO();
+		ArrayList<Member> members = new ArrayList<Member>();
+		
+		try {
+			members = dao.getMembers();
+
+		for(int i=0; i<members.size();i++)
+			map.put(members.get(i).getId(), null);
+		
+		Scanner s = new Scanner(System.in);	// 화면으로부터 라인단위로 입력받는다.
+
+		while(true) {
+			System.out.println("id를 입력해주세요.");
+			System.out.print("id :");
+			String id = s.nextLine().trim();
+
+
+			if(!map.containsKey(id)) {
+				System.out.println("입력하신 id는 존재하지 않습니다. 다시 입력해주세요.");
+				continue;
+			}
+				 else {
+					System.out.println("id가 일치합니다.");						
+					break;
+				}
+			}
+		 // while
+		} catch(Exception e) {
+			System.out.println("예외처리 6:"+e.getMessage());
+			e.printStackTrace();
+		}
+	} // main
+}

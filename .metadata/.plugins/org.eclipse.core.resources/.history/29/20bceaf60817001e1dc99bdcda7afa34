@@ -1,0 +1,317 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Scanner;
+
+public class MultiServer06_29 {
+    ArrayList<Member> members;
+    static Connection con;
+    Map<String, String> listw;
+    Map<String, String> inviteM;
+    Map<String, PrintWriter> waitUser; // 대기방 사용자
+    Map<String, Map<String, PrintWriter>> roomN; // 공개방 해시맵
+    Map<String, Map<String, PrintWriter>> roomP; // 비밀방
+    Map<String, Integer> capa; // 각방의 정원
+    Map<String, String> pwd; // 비밀방의 비밀번호
+    static ServerSocket serverSocket;
+    static Socket socket = null;
+    Map<String, PrintWriter> clientMap;
+
+    // ID를 KEY로 해서 스레드를 VALUE로 갖고 있는 HASHMAP
+
+    Date now = new Date(System.currentTimeMillis());
+    SimpleDateFormat simple = new SimpleDateFormat("(a hh:mm)");
+
+    // 채팅내용 옆에 시간을 같이 출력하기 위해서 현재시간에 포맷을 지정
+
+    public MultiServer06_29() {
+        members = new ArrayList<>();
+        inviteM = new HashMap<String, String>();
+        waitUser = new HashMap<String, PrintWriter>();
+        clientMap = new HashMap<String, PrintWriter>();
+        roomN = new HashMap<String, Map<String, PrintWriter>>();
+        capa = new HashMap<String, Integer>();
+        pwd = new HashMap<String, String>();
+        listw = new HashMap<String, String>();
+        Collections.synchronizedMap(clientMap);
+
+        listw.put("/list", "모든 사용자 리스트");
+        listw.put("/waituser", "대기방 유저 리스트");
+        listw.put("/rlist", "채팅방 리스트 출력");
+        listw.put("/adword", "개인 금칙어 설정 추가");
+        listw.put("/delword", "개인 설정 금칙어 삭제");
+        listw.put("/agree", "채팅방 초대 수락 명령어");
+
+        // 해쉬맵 동기화 설정.
+        Collections.synchronizedMap(inviteM);
+        Collections.synchronizedMap(waitUser);
+        Collections.synchronizedMap(roomN);
+        Collections.synchronizedMap(clientMap);
+        Collections.synchronizedMap(capa);
+        Collections.synchronizedMap(pwd);
+    }
+
+    public MultiServer06_29(Socket socket) {
+        clientMap = new HashMap<String, PrintWriter>();
+        Collections.synchronizedMap(clientMap);
+    }
+
+    public void init() {
+        try {
+            String url = "jdbc:oracle:thin:@localhost:1521:xe";
+            String user = "MChat";
+            String password = "123";
+            con = DriverManager.getConnection(url, user, password);
+
+            serverSocket = new ServerSocket(9999);
+            System.out.println("서버가 시작되었습니다.");
+            // Perform login process
+            login(socket);
+            while (true) {
+                socket = serverSocket.accept();
+                System.out.println("[" + socket.getInetAddress() + ":" + socket.getPort() + "]" + "에서 접속하였습니다.");
+
+                Thread msr = new MultiServerT(socket);
+                msr.start();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                con.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void login(Socket socket) {
+        BufferedReader in = null;
+        PrintWriter out = null;
+
+        try {
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            out = new PrintWriter(socket.getOutputStream(), true);
+
+            while (true) {
+                String sql = "SELECT * FROM MEMBER";
+                Statement stmt = con.createStatement();
+                ResultSet rs = stmt.executeQuery(sql);
+                out.println("<<로그인을 해주세요>>");
+                out.println("ID: ");
+                String id = in.readLine();
+                out.println("Password: ");
+                String password = in.readLine();
+
+                while (rs.next()) {
+                    if (id.equals(rs.getString("ID")) && password.equals(rs.getString("PWD"))) {
+                        out.println("<<로그인 성공>>");
+                        Member member = new Member(id, password);
+                        members.add(member);
+                        return;
+                    }
+                }
+                out.println("<<로그인 실패>>");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                in.close();
+                out.close();
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        MultiServer06_29 ms = new MultiServer06_29();
+        ms.init();
+    }
+
+    class Member {
+        String id;
+        String password;
+
+        public Member(String id, String password) {
+            this.id = id;
+            this.password = password;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+    }
+
+    class MultiServerT extends Thread {
+        Socket socket;
+        PrintWriter out = null;
+        BufferedReader in = null;
+
+        public MultiServerT(Socket socket) {
+            this.socket = socket;
+            try {
+                out = new PrintWriter(this.socket.getOutputStream(), true);
+                in = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+            } catch (Exception e) {
+                System.out.println("예외:" + e);
+            }
+        }
+
+        public void run() {
+            String name = ""; // 클라이언트로부터 받은 이름을 저장할 변수
+            String s = "";
+
+            try {
+                name = in.readLine(); // 클라이언트에서 처음으로 보내는 메시지는
+                // 클라이언트가 사용할 이름이다.
+                sendAllMsg("", name + "님이 입장하셨습니다."); // 접속한 사람을 제외한 나머지
+                // 클라이언트들에게 메시지를 전송한다.
+                clientMap.put(name, out); // 해쉬맵에 키를 name으로 출력스트림 객체를 저장한다.
+
+                System.out.println("현재 접속자 수는 " + clientMap.size() + "명 입니다.");
+
+                // 입력스트림이 null이 아니면 반복한다.
+                while (in != null) {
+                    s = in.readLine();
+
+                    if (s == null)
+                        break;
+
+                    if (s.equals("/list")) {
+                        out.println("<<명령어 목록>>");
+                        Iterator<String> it = listw.keySet().iterator();
+                        while (it.hasNext()) {
+                            out.println(listw.get(it.next()));
+                        }
+                    } else if (s.equals("/waituser")) {
+                        out.println("<<대기방 유저 목록>>");
+                        Iterator<String> it = waitUser.keySet().iterator();
+                        while (it.hasNext()) {
+                            out.println(waitUser.get(it.next()));
+                        }
+                    } else if (s.equals("/rlist")) {
+                        out.println("<<채팅방 리스트>>");
+                        Iterator<String> it = roomN.keySet().iterator();
+                        while (it.hasNext()) {
+                            out.println(it.next());
+                        }
+                    } else if (s.equals("/adword")) {
+                        out.println("<<개인 금칙어 설정 추가>>");
+                        out.println("추가할 단어 입력: ");
+                        String addword = in.readLine();
+                        listw.put(addword, "금칙어 설정 추가");
+                    } else if (s.equals("/delword")) {
+                        out.println("<<개인 설정 금칙어 삭제>>");
+                        out.println("삭제할 단어 입력: ");
+                        String delword = in.readLine();
+                        listw.remove(delword);
+                    } else if (s.equals("/agree")) {
+                        out.println("<<초대 수락 명령어>>");
+                        out.println("수락할 유저 입력: ");
+                        String accept = in.readLine();
+                        String room = inviteM.get(accept);
+                        roomN.get(room).put(name, out);
+                        out.println(room + " 채팅방에 입장하셨습니다.");
+                    } else if (s.charAt(0) == '/') {
+                        if (s.indexOf(" ") == -1) {
+                            out.println("<<명령어 오류>>");
+                            continue;
+                        }
+                        int firstSpace = s.indexOf(" ");
+                        String command = s.substring(0, firstSpace);
+                        String cmdMessage = s.substring(firstSpace + 1);
+
+                        if (command.equals("/invite")) {
+                            if (waitUser.containsKey(cmdMessage)) {
+                                inviteM.put(cmdMessage, name);
+                                out.println(cmdMessage + " 유저를 초대하였습니다.");
+                                waitUser.get(cmdMessage).println(name + "님이 " + cmdMessage + "님을 초대하였습니다.");
+                            } else {
+                                out.println("대기방에 존재하지 않는 유저입니다.");
+                            }
+                        } else if (command.equals("/kick")) {
+                            if (roomN.containsKey(cmdMessage)) {
+                                if (roomN.get(cmdMessage).containsKey(name)) {
+                                    roomN.get(cmdMessage).remove(name);
+                                    out.println(cmdMessage + " 채팅방에서 퇴장하셨습니다.");
+                                    sendAllMsg(cmdMessage, "<<퇴장자 알림>> " + name + "님이 채팅방에서 퇴장하셨습니다.");
+                                } else {
+                                    out.println("현재 " + cmdMessage + " 채팅방에 속해있지 않습니다.");
+                                }
+                            } else {
+                                out.println("해당 채팅방이 존재하지 않습니다.");
+                            }
+                        } else if (command.equals("/help")) {
+                            out.println("<<명령어 목록>>");
+                            Iterator<String> it = listw.keySet().iterator();
+                            while (it.hasNext()) {
+                                out.println(listw.get(it.next()));
+                            }
+                        } else {
+                            out.println("<<명령어 오류>>");
+                        }
+                    } else {
+                        sendAllMsg(name, s);
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("예외:" + e);
+            } finally {
+                clientMap.remove(name);
+                sendAllMsg("", name + "님이 퇴장하셨습니다.");
+                System.out.println("[" + socket.getInetAddress() + ":" + socket.getPort() + "]" + "에서 접속을 종료하였습니다.");
+                System.out.println("현재 접속자 수는 " + clientMap.size() + "명 입니다.");
+
+                try {
+                    in.close();
+                    out.close();
+                    socket.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        // 접속된 모든 클라이언트들에게 메시지를 전달
+        public void sendAllMsg(String name, String msg) {
+            // 출력스트림을 순차적으로 얻어와서 해당 메시지를 출력한다.
+            Iterator<String> it = clientMap.keySet().iterator();
+
+            while (it.hasNext()) {
+                try {
+                    PrintWriter it_out = (PrintWriter) clientMap.get(it.next());
+                    if (name.equals("")) {
+                        it_out.println(msg);
+                    } else {
+                        it_out.println("[" + name + "] " + msg);
+                    }
+                } catch (Exception e) {
+                    System.out.println("예외:" + e);
+                }
+            }
+        }
+    }
+}

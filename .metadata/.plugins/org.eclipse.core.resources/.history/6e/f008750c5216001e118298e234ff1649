@@ -1,0 +1,237 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import java.sql.*;
+
+public class MultiServer
+{
+	static ServerSocket serverSocket = null;
+	static Socket socket = null;
+	static Connection con;
+	Map<String, String> listw;
+	Map<String, String> inviteM;
+	Map<String, PrintWriter> waitUser; // 대기방 사용자
+	Map<String, PrintWriter> clientMap; // 사용자 아이디와 출력할 내용 -- 대기실용 해시맵
+	Map<String, Map<String, PrintWriter>> roomN; // 공개방 해시맵
+	Map<String, Map<String, PrintWriter>> roomP; // 비밀방
+	Map<String, Integer> capa; // 각방의 정원
+	Map<String, String> pwd; // 비밀방의 비밀번호
+
+	public MultiServer()
+	{
+		inviteM = new HashMap<String, String>();
+		waitUser = new HashMap<String, PrintWriter>();
+		clientMap = new HashMap<String, PrintWriter>();
+		roomN = new HashMap<String, Map<String, PrintWriter>>();
+		capa = new HashMap<String, Integer>();
+		pwd = new HashMap<String, String>();
+		listw = new HashMap<String, String>();
+		Collections.synchronizedMap(clientMap);
+
+		listw.put("/list", "모든 사용자 리스트");
+		listw.put("/waituser", "대기방 유저 리스트");
+		listw.put("/rlist", "채팅방 리스트 출력");
+		listw.put("/adword", "개인 금칙어 설정 추가");
+		listw.put("/delword", "개인 설정 금칙어 삭제");
+		listw.put("/agree", "채팅방 초대 수락 명령어");
+
+		// 해쉬맵 동기화 설정.
+		Collections.synchronizedMap(inviteM);
+		Collections.synchronizedMap(waitUser);
+		Collections.synchronizedMap(roomN);
+		Collections.synchronizedMap(clientMap);
+		Collections.synchronizedMap(capa);
+		Collections.synchronizedMap(pwd);
+
+	}
+
+	public void init()
+	{
+		try
+		{
+			serverSocket = new ServerSocket(9999);
+			System.out.println("서버가 시작되었습니다.");
+
+			while (true)
+			{
+				socket = serverSocket.accept();
+				System.out.println(socket.getInetAddress() + ":" + socket.getPort());
+
+				Thread msr = new MultiServerR(socket);
+				msr.start();
+			}
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		} finally
+		{
+			try
+			{
+				serverSocket.close();
+			} catch (Exception e)
+			{
+				e.printStackTrace();
+			}
+		}
+	}
+
+	// 사용자 리스트
+	public void list(PrintWriter out)
+	{
+		Iterator<String> it = clientMap.keySet().iterator();
+		String msg = "사용자리스트 [";
+		while (it.hasNext())
+		{
+			msg += (String) it.next() + ",";
+		}
+		msg = msg.substring(0, msg.length() - 1) + "]";
+		try
+		{
+			out.println(msg); // 대기 리스트 출력
+		} catch (Exception e)
+		{
+		}
+	}
+
+	// 대기방 사용자 리스트
+	public void waitU(PrintWriter out)
+	{
+		Iterator<String> it = waitUser.keySet().iterator();
+		String msg = "대기방 사용자 리스트 [";
+		while (it.hasNext())
+		{
+			msg += (String) it.next() + ",";
+		}
+		msg = msg.substring(0, msg.length() - 1) + "]";
+
+		try
+		{
+			out.println(msg); // 리스트 출력
+		} catch (Exception e)
+		{
+		}
+	}
+
+	// 해당방 사용자
+	public void userR(String title, PrintWriter out)
+	{
+		Iterator<String> it = roomN.get(title).keySet().iterator();
+		String msg = title + "방 사용자 리스트 [";
+		while (it.hasNext())
+		{
+			msg += (String) it.next() + ",";
+		}
+		msg = msg.substring(0, msg.length() - 1) + "]";
+
+		try
+		{
+			out.println(msg); // 리스트 출력
+		} catch (Exception e)
+		{
+		}
+	}
+
+	public static void main(String[] args)
+	{
+		Connection conn = null;
+		Statement stmt = null;
+
+		try
+		{
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+			System.out.println("오라클 드라이버됨"); //확인용
+			String url = ("jdbc:oracle:thin:@localhost:1521:xe");
+			String user = ("mchat");
+			String password = ("123");
+
+			conn = DriverManager.getConnection(url, user, password);
+//			System.out.println("conn ="+conn); // 확인용
+			stmt=conn.createStatement();
+			
+			
+			
+		} catch (ClassNotFoundException e)
+		{
+			System.out.println("오라클 드라이버 클래스를 못찾음");
+		} catch (SQLException e)
+		{
+			System.out.println("sql오류 \n" + e.getMessage());
+		} finally
+		{
+			try
+			{
+				if (stmt != null)
+					stmt.close();
+				if (conn != null)
+					conn.close();
+			} catch (Exception e)
+			{
+			}
+		}
+
+		MultiServer ms = new MultiServer();
+		ms.init();
+	}
+
+	class MultiServerR extends Thread
+	{
+		String sql1 = null;
+		String sql = null;
+		PreparedStatement pstmt1 = null;
+		PreparedStatement pstmt2 = null;
+		PreparedStatement pstmt3 = null;
+		PreparedStatement pstmt4 = null;
+		ResultSet rs = null;
+
+		Socket socket;
+		PrintWriter out = null;
+		BufferedReader in = null;
+		String name = "";
+		String title = null;
+
+		// 생성자
+		public MultiServerR(Socket socket)
+		{
+			this.socket = socket;
+
+			try
+			{
+				out = new PrintWriter(socket.getOutputStream(), true);
+				in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			} catch (Exception e)
+			{
+
+			}
+		}
+
+		// 쓰레드를 사용하기 위해 run()메서드 재정의
+		@Override
+		public void run()
+		{
+			int type = 0;
+			String s = "";
+			String id = null; // 아이디
+			String pw = null; // 비밀번호
+			int th = 0;
+			Iterator<String> iter = null;
+			String ss = "";
+			String key = null;
+			String getMenu = "";
+
+			out.println("=============================================");
+			out.println("==================대기실====================");
+			out.println("=============================================");
+			out.println();
+
+		}
+	}
+
+}

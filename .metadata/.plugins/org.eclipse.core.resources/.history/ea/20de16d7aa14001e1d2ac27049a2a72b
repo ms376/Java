@@ -1,0 +1,6 @@
+
+public class broadcast
+{
+	private Set<String> userNames = new HashSet<>();
+	private Set<UserThread> userThreads = new HashSet<>();
+}

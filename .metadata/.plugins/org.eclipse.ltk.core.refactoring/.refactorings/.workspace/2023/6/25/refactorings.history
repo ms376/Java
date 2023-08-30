@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Delete 26 resources" deleteContents="false" description="Delete 26 resources" element1="/Chapter02" element10="/Chapter09_3" element11="/Chapter09_4" element12="/Chapter10" element13="/Chapter11" element14="/Chapter12_1" element15="/Chapter12_2" element16="/Chapter12_3" element17="/Chapter12_4" element18="/Chapter12_5" element19="/Chapter13" element2="/Chapter03" element20="/Chapter14" element21="/Chapter15" element22="/Chapter16" element23="/Chapter17" element24="/HelloWorld" element25="/javah" element26="/prct" element3="/Chapter04" element4="/Chapter05" element5="/Chapter06" element6="/Chapter07" element7="/Chapter08" element8="/Chapter09_1" element9="/Chapter09_2" flags="7" id="org.eclipse.ltk.core.refactoring.delete.resources" resources="26" stamp="1687140442193"/>
+</session>

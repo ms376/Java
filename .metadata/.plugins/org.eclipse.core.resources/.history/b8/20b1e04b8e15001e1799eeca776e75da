@@ -1,0 +1,7 @@
+
+
+public class Snippet
+{
+	id1 varchar2(30) not null,
+	
+}

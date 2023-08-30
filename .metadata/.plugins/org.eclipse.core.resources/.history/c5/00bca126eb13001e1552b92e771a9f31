@@ -1,0 +1,20 @@
+
+public class PreparedStatementEx
+{
+	static
+	{
+		try
+		{
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+		} catch (ClassNotFoundException cnfe)
+		{
+			cnfe.printStackTrace();
+		}
+	}
+	
+	public static void main(String[] args)
+	{
+
+	}
+
+}

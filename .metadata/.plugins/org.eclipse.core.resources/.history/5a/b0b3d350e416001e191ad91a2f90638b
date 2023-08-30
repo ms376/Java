@@ -1,0 +1,81 @@
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Scanner;
+
+public class ChatClient
+{
+
+	public static void main(String[] args) throws UnknownHostException, IOException
+	{
+		HashMap<String, String> map = new HashMap<String, String>();
+		try
+		{
+			String ServerIP = "localhost";
+			if (args.length > 0)
+				ServerIP = args[0];
+			Socket socket = new Socket(ServerIP, 9999); // 소켓 객체 생성
+			System.out.println("서버와 연결이 되었습니다....");
+
+			// 서버에서 보내는 메시지를 사용자의 콘솔에 출력하는 쓰레드.
+			Thread receiver = new Receiver(socket);
+			receiver.start();
+
+			// 사용자로부터 얻은 문자열을 서버로 전송해주는 역할을 하는 쓰레드
+			Thread sender = new Sender(socket);
+			sender.start();
+
+		} catch (Exception e)
+		{
+			System.out.println("예외[MultiClient class]:" + e);
+		}
+		try
+		{
+			members = MultiServer06_29.getMembers();
+
+			for (int i = 0; i < members.size(); i++)
+				map.put(members.get(i).getId(), members.get(i).getPw());
+
+			Scanner s = new Scanner(System.in); // 화면으로부터 라인단위로 입력받는다.
+
+			while (true)
+			{
+				System.out.println("id와 password를 입력해주세요.");
+				System.out.print("id :");
+				String id = s.nextLine().trim();
+
+				System.out.print("password :");
+				String password = s.nextLine().trim();
+				System.out.println();
+
+				if (!map.containsKey(id))
+				{
+					System.out.println("입력하신 id는 존재하지 않습니다. 다시 입력해주세요.");
+					continue;
+				} else
+				{
+					if (!(map.get(id)).equals(password))
+					{
+						System.out.println("비밀번호가 일치하지 않습니다. 다시 입력해주세요.");
+					} else
+					{
+						System.out.println("id와 비밀번호가 일치합니다.");
+						break;
+					}
+				}
+			} // while
+		} catch (SQLException e)
+		{
+			System.out.println("예외처리 :" + e.getMessage()); // 예외 메시지 (console) 인쇄
+			e.printStackTrace();
+		} catch (Exception e)
+		{
+			System.out.println("예외처리 6:" + e.getMessage());
+			e.printStackTrace();
+		}
+	} // main
+
+}

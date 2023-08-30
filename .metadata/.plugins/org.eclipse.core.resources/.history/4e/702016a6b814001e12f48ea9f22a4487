@@ -1,0 +1,85 @@
+package net.codejava.networking.chat.server;
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+
+//채팅 서버 프로그램입니다.
+//Ctrl + C를 눌러 프로그램을 종료합니다.
+
+public class ChatServer {
+	private int port;
+	private Set<String> userNames = new HashSet<>();
+	private Set<UserThread> userThreads = new HashSet<>();
+
+	public ChatServer() {
+		try  {
+			@SuppressWarnings("resource")
+			ServerSocket ss = new ServerSocket(9999);
+			System.out.println("채팅 서버가 포트에서 수신 중입니다. " + port);
+
+			while (true) {
+				Socket socket = ss.accept();
+				System.out.println("새로운 사용자 연결되었습니다.");
+
+				UserThread newUser = new UserThread(socket, this);
+				userThreads.add(newUser);
+				newUser.start();
+
+			}
+
+		} catch (IOException ex) {
+			System.out.println("서버에러: " + ex.getMessage());
+			ex.printStackTrace();
+		}
+	}
+
+	public static void main(String[] args) {
+		if (args.length < 1) {
+			System.out.println("Syntax: java ChatServer <port-number>");
+			System.exit(0);
+		}
+		new ChatServer();
+	}
+
+	/**
+	 * Delivers a message from one user to others (broadcasting)
+	 */
+	void broadcast(String message, UserThread excludeUser) {
+		for (UserThread aUser : userThreads) {
+			if (aUser != excludeUser) {
+				aUser.sendMessage(message);
+			}
+		}
+	}
+
+	/**
+	 * Stores username of the newly connected client.
+	 */
+	void addUserName(String userName) {
+		userNames.add(userName);
+	}
+
+	/**
+	 * When a client is disconneted, removes the associated username and UserThread
+	 */
+	void removeUser(String userName, UserThread aUser) {
+		boolean removed = userNames.remove(userName);
+		if (removed) {
+			userThreads.remove(aUser);
+			System.out.println("The user " + userName + " quitted");
+		}
+	}
+
+	Set<String> getUserNames() {
+		return this.userNames;
+	}
+
+	/**
+	 * Returns true if there are other users connected (not count the currently connected user)
+	 */
+	boolean hasUsers() {
+		return !this.userNames.isEmpty();
+	}
+}

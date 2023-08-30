@@ -1,0 +1,127 @@
+
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Container;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+
+
+
+public class Head implements ActionListener, ItemListener{
+	private JLabel label;
+	private JTextArea dateshow;
+	private JTextArea dataOut;
+	private JLabel sumlabel;
+	private JTextArea sumOut;
+	private JComboBox<String> branchc;
+	private JButton showOrder;
+	private JButton aprOrder;
+    private Container tab;
+    private CardLayout clayout;
+	private JPanel headPanel;
+	private JPanel buttonPanel1;
+	private JPanel buttonPanel2;
+	private JPanel functionPanel;
+	private JPanel sumPanel;
+	private JFrame jframe;
+	
+	private Connection con;
+	private PreparedStatement pstmt;
+	private HashMap<String, String> brtablelist;
+	
+	
+	public Head() {}
+	public Head(Connection con) throws SQLException {
+		this.con = con;
+		label = new JLabel("본사");
+		brtablelist = new HashMap<String,String>();
+		// 보완필요 if문 반복을 피하기 위해서 hashmap으로 코드를 짰는데 프로그램 실행할 때마다 반복해서 put메서드를 실행해줘야 하는게... 
+		brtablelist.put("강남점", "kangnam");
+		brtablelist.put("모란점", "moran");
+		
+		Date now = new Date(System.currentTimeMillis());
+		SimpleDateFormat simple= new SimpleDateFormat("YY-MM-dd");
+		dateshow = new JTextArea();
+		dateshow.setText(simple.format(now)); // textArea에 날짜 표시
+		dateshow.setEditable(false);
+		
+		headPanel = new JPanel();
+		headPanel.setLayout(new BorderLayout());
+		headPanel.add(label,BorderLayout.WEST);
+		headPanel.add(dateshow,BorderLayout.EAST);
+		
+		dataOut= new JTextArea(40,30);
+		 JScrollPane jsp = new JScrollPane(dataOut,
+	        		JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+	        		JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		
+		 String[]list = {"지점선택","본사","강남점","모란점"};
+		branchc = new JComboBox<String>(list);
+		branchc.addItemListener(this);
+		
+		showOrder = new JButton("주문조회");
+		showOrder.addActionListener(this);
+		buttonPanel1 = new JPanel();
+		buttonPanel1.setLayout(new BorderLayout());
+		buttonPanel1.add(showOrder,BorderLayout.CENTER);		
+		aprOrder = new JButton("승인");
+		aprOrder.addActionListener(this);
+		buttonPanel2 = new JPanel();
+		buttonPanel2.setLayout(new BorderLayout());
+		buttonPanel2.add(aprOrder,BorderLayout.CENTER);
+		
+		
+		
+		 tab = new JPanel();
+	     clayout = new CardLayout();
+	     tab.setLayout(clayout);
+	     tab.add(buttonPanel1, "show");
+	     tab.add(buttonPanel2, "approve");
+	     
+		sumlabel = new JLabel("매출합계");
+		sumOut = new JTextArea();
+		sumPanel = new JPanel();
+		sumPanel.setLayout(new BorderLayout());
+		sumPanel.add(sumlabel,BorderLayout.WEST);
+		sumPanel.add(sumOut,BorderLayout.CENTER);
+		
+		functionPanel = new JPanel();
+		functionPanel.setLayout(new BorderLayout());
+		functionPanel.add(branchc,BorderLayout.NORTH);
+		functionPanel.add(tab,BorderLayout.CENTER);
+		functionPanel.add(sumPanel,BorderLayout.SOUTH);
+		
+		clayout.show(tab, "show");
+		jframe = new JFrame("재고관리 프로그램");
+		jframe.setLayout(new BorderLayout());
+		jframe.add(headPanel,BorderLayout.NORTH);
+		jframe.add(jsp,BorderLayout.CENTER);
+		jframe.add(functionPanel,BorderLayout.EAST);
+		
+		jframe.pack();
+		jframe.setLocationRelativeTo(null);
+		jframe.setVisible(true);
+		
+		
+		
+	}	
+	}

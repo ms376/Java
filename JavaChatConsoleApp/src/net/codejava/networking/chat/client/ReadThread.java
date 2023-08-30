@@ -1,0 +1,44 @@
+import java.io.*;
+import java.net.*;
+
+//이 스레드는 서버의 입력을 읽고 인쇄하는 역할을 합니다.
+//콘솔에.
+//클라이언트가 서버에서 연결을 끊을 때까지 무한 루프로 실행됩니다.
+
+public class ReadThread extends Thread {
+	private BufferedReader reader;
+	@SuppressWarnings("unused")
+	private Socket socket;
+	private ChatClient client;
+
+	public ReadThread(Socket socket, ChatClient client) {
+		this.socket = socket;
+		this.client = client;
+
+		try {
+			InputStream input = socket.getInputStream();
+			reader = new BufferedReader(new InputStreamReader(input));
+		} catch (IOException ex) {
+			System.out.println("input stream이 오입력됨: " + ex.getMessage());
+			ex.printStackTrace();
+		}
+	}
+
+	public void run() {
+		while (true) {
+			try {
+				String response = reader.readLine();
+				System.out.println("\n" + response);
+
+				// prints the username after displaying the server's message
+				if (client.getUserName() != null) {
+					System.out.print("[" + client.getUserName() + "]: ");
+				}
+			} catch (IOException ex) {
+				System.out.println("서버에서 읽지못했음: " + ex.getMessage());
+				ex.printStackTrace();
+				break;
+			}
+		}
+	}
+}

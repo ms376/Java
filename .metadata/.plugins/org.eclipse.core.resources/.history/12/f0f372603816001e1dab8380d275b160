@@ -1,0 +1,1000 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+//import MultiServer.MultiServer2;
+
+import java.sql.*;
+
+public class MultiServer2
+{
+	static ServerSocket serverSocket = null;
+	static Socket socket = null;
+	static Connection con;
+	Map<String, String> listw;
+	Map<String, String> inviteM;
+	Map<String, PrintWriter> waitUser; // 대기방 사용자
+	Map<String, PrintWriter> clientMap; // 사용자 아이디와 출력할 내용 -- 대기실용 해시맵
+	Map<String, Map<String, PrintWriter>> roomN; // 공개방 해시맵
+	Map<String, Map<String, PrintWriter>> roomP; // 비밀방
+	Map<String, Integer> capa; // 각방의 정원
+	Map<String, String> pwd; // 비밀방의 비밀번호
+	
+	
+	public MultiServer2()
+	{
+		inviteM = new HashMap<String, String>();
+		waitUser = new HashMap<String, PrintWriter>();
+		clientMap = new HashMap<String, PrintWriter>();
+		roomN = new HashMap<String, Map<String, PrintWriter>>();
+		capa = new HashMap<String, Integer>();
+		pwd = new HashMap<String, String>();
+		listw = new HashMap<String, String>();
+		Collections.synchronizedMap(clientMap);
+		
+		listw.put("/list", "모든 사용자 리스트");
+		listw.put("/waituser", "대기방 유저 리스트");
+		listw.put("/rlist", "채팅방 리스트 출력");
+		listw.put("/adword", "개인 금칙어 설정 추가");
+		listw.put("/delword", "개인 설정 금칙어 삭제");
+		listw.put("/agree", "채팅방 초대 수락 명령어");
+		
+		// 해쉬맵 동기화 설정.
+		Collections.synchronizedMap(inviteM);
+		Collections.synchronizedMap(waitUser);
+		Collections.synchronizedMap(roomN);
+		Collections.synchronizedMap(clientMap);
+		Collections.synchronizedMap(capa);
+		Collections.synchronizedMap(pwd);
+
+	}
+
+	public void init()
+	{
+		try
+		{
+			serverSocket = new ServerSocket(9999);
+			System.out.println("서버가 시작되었습니다.");
+
+			while (true)
+			{
+				socket = serverSocket.accept();
+				System.out.println(socket.getInetAddress() + ":" + socket.getPort());
+
+				Thread msr = new MultiServerT(socket);
+				msr.start();
+			}
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		} finally
+		{
+			try
+			{
+				serverSocket.close();
+			} catch (Exception e)
+			{
+				e.printStackTrace();
+			}
+		}
+	}
+	// 사용자 리스트
+	public void list(PrintWriter out)
+	{
+		Iterator<String> it = clientMap.keySet().iterator();
+		String msg = "사용자리스트 [";
+		while (it.hasNext())
+		{
+			msg += (String) it.next() + ",";
+		}
+		msg = msg.substring(0, msg.length() - 1) + "]";
+		try
+		{
+			out.println(msg); // 대기 리스트 출력
+		} catch (Exception e)
+		{
+		}
+	}
+	// 대기방 사용자 리스트
+	public void waitU(PrintWriter out)
+	{
+		Iterator<String> it = waitUser.keySet().iterator();
+		String msg = "대기방 사용자 리스트 [";
+		while (it.hasNext())
+		{
+			msg += (String) it.next() + ",";
+		}
+		msg = msg.substring(0, msg.length() - 1) + "]";
+
+		try
+		{
+			out.println(msg); // 리스트 출력
+		} catch (Exception e)
+		{
+		}
+	}
+	// 해당방 사용자
+		public void userR(String title, PrintWriter out)
+		{
+			Iterator<String> it = roomN.get(title).keySet().iterator();
+			String msg = title + "방 사용자 리스트 [";
+			while (it.hasNext())
+			{
+				msg += (String) it.next() + ",";
+			}
+			msg = msg.substring(0, msg.length() - 1) + "]";
+
+			try
+			{
+				out.println(msg); // 리스트 출력
+			} catch (Exception e)
+			{
+			}
+		}
+		public void adlogin(BufferedReader in, PrintWriter out) throws IOException, SQLException
+		{
+
+			String menu = "";
+			String sql = null;
+			PreparedStatement pstmt4 = null;
+			PreparedStatement pstmt2 = null;
+			ResultSet rs = null;
+			String id = null;
+			String word = null;
+
+			while (true)
+			{
+				out.println("===메뉴===");
+				out.println("1. 블랙리스트 목록");
+				out.println("2. 블랙리스트 등록");
+				out.println("3. 블랙리스트 해제");
+				out.println("4. 방폭파");
+				out.println("5. 금칙어 목록");
+				out.println("6. 금칙어 등록");
+				out.println("7. 금칙어 삭제");
+				out.println("8. 나가기");
+				out.println();
+				menu = in.readLine();
+				// 블랙리스트 목록
+				if (menu.equals("1"))
+				{
+
+					sql = "select id from chatuser where utype = ?";
+					pstmt2 = con.prepareStatement(sql);
+					pstmt2.setString(1, "1");
+					rs = pstmt2.executeQuery();
+					out.println("<<블랙리스트 목록>>");
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						out.println(word);
+					}
+					out.println();
+				}
+				// 블랙리스트 등록
+				else if (menu.equals("2"))
+				{
+
+					sql = "select id from chatuser";
+					pstmt2 = con.prepareStatement(sql);
+					rs = pstmt2.executeQuery();
+					out.println("<<사용자 아이디>>");
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						out.println(word);
+					}
+
+					out.println("블랙리스트 등록을 원하는 id를 입력하세요.");
+					id = in.readLine();
+
+					sql = "update chatuser set utype = '1' where id = ?";
+					pstmt4 = con.prepareStatement(sql);
+					pstmt4.setString(1, id);
+					rs = pstmt4.executeQuery();
+					out.println("완료되었습니다.");
+					out.println();
+				}
+				// 블랙리스트 해제
+				else if (menu.equals("3"))
+				{
+					out.println("블랙리스트 해제를 원하는 id를 입력하세요.");
+					id = in.readLine();
+					sql = "update chatuser set utype = '0' where id = ?";
+					pstmt4 = con.prepareStatement(sql);
+					pstmt4.setString(1, id);
+					rs = pstmt4.executeQuery();
+					out.println("완료되었습니다.");
+					out.println();
+				}
+				// 방폭파
+				else if (menu.equals("4"))
+				{
+					roomList(out);
+					out.println("방폭파를 원하는 방 이름을 입력하세요");
+					id = in.readLine();
+					roomN.remove(id);
+					out.println(id + "방이 폭파되었습니다.");
+					out.println();
+				}
+				// 금칙어 목록
+				else if (menu.equals("5"))
+				{
+					out.println("<<금칙어 목록>>");
+					sql = "select * from blackword";
+					pstmt2 = con.prepareStatement(sql);
+					rs = pstmt2.executeQuery();
+					while (rs.next())
+					{
+						out.println("> " + rs.getString(1));
+					}
+					out.println();
+				}
+				// 금칙어 추가
+				else if (menu.equals("6"))
+				{
+					out.println("<<금칙어 추가>>");
+					out.println("금칙어 : ");
+					id = in.readLine();
+					sql = "insert into blackword values (?)";
+					pstmt4 = con.prepareStatement(sql);
+					pstmt4.setString(1, id);
+					rs = pstmt4.executeQuery();
+					out.println("\'" + id + "\'가 금칙어로 추가되었습니다. ");
+					out.println();
+				}
+				// 금칙어 삭제
+				else if (menu.equals("7"))
+				{
+
+					out.println("삭제할 금칙어 : ");
+					id = in.readLine();
+					sql = "delete from blackword where word = ?";
+					pstmt2 = con.prepareStatement(sql);
+					pstmt2.setString(1, id);
+					rs = pstmt2.executeQuery();
+					out.println("금칙어가 삭제되었습니다.");
+					out.println();
+				}
+
+				// 페이지 종료
+				else if (menu.equals("8"))
+				{
+					out.println("관리자 페이지를 종료합니다.");
+					break;
+				} else
+				{
+					out.println("잘못 선택하셨습니다.");
+				}
+			}
+		}
+	public static void main(String[] args)
+	{
+		Connection conn = null;
+		Statement stmt = null;
+		
+		try
+		{
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+//			System.out.println("오라클 드라이버됨"); //확인용
+			String url = ("jdbc:oracle:thin:@localhost:1521:xe");
+			String user = ("mchat");
+			String password = ("123");
+			
+			conn = DriverManager.getConnection(url,user,password);
+//			System.out.println("conn ="+conn); // 확인용
+			StringBuffer sql = new StringBuffer();
+			stmt = conn.createStatement();
+			stmt.executeUpdate(sql.toString()); //sql실수했을때 exception
+		}catch(ClassNotFoundException e){
+			System.out.println("오라클 드라이버 클래스를 못찾음");
+		} 
+		catch (SQLException e)
+		{
+			System.out.println("sql오류"+e.getMessage());
+		}finally {
+			try
+			{
+				if(stmt != null) stmt.close();
+				if(conn != null) conn.close();
+			} catch (Exception e)
+			{
+			}
+		}
+		
+		
+
+//		try
+//		{
+//			con = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521:xe", "mchat", "123");
+//		} catch (SQLException sqle)
+//		{
+//			System.out.println("sqlㅗㅇㄹㅠ");
+//		}
+		MultiServer2 ms = new MultiServer2();
+		ms.init();
+	}
+	// 접속된 모든 클라이언트들에게 메세지를 전달
+	public void sendAllMsg(String msg, String name)
+	{
+
+		PreparedStatement pstmt2 = null;
+		String sql = null;
+		ResultSet rs = null;
+		String key = null;
+		String word = null;
+		String query = null;
+		int chk = 0;
+		int id2 = 0;
+		int id1 = 0;
+
+		// 해쉬 맵과 이터레이터를 이용해서 출력스트림을 순차적으로 얻어와서 해당 메시지를 각방에 출력한다.
+		Iterator<String> it = clientMap.keySet().iterator();
+
+		while (it.hasNext())
+		{
+			chk = 0;
+			id2 = 0;
+			try
+			{
+				key = it.next();
+				PrintWriter it_out = (PrintWriter) clientMap.get(key);
+				sql = "select * from blackword";
+				pstmt2 = con.prepareStatement(sql);
+				rs = pstmt2.executeQuery();
+				while (rs.next())
+				{
+					word = rs.getString(1);
+					if (msg.contains(word))
+					{
+						chk = 1;
+						for (int i = 0; i < msg.length(); i++)
+						{
+							it_out.print("*");
+						}
+						it_out.println();
+						break;
+					}
+				}
+
+				sql = "select count(*) from $tablename";
+				query = sql.replace("$tableName", key);
+				pstmt2 = con.prepareStatement(query);
+				rs = pstmt2.executeQuery();
+				while (rs.next())
+				{
+					id1 = Integer.parseInt(rs.getString(1));
+				}
+
+				if (id1 > 0)
+				{
+					sql = "select * from $tablename";
+					query = sql.replace("$tableName", key);
+					pstmt2 = con.prepareStatement(query);
+					rs = pstmt2.executeQuery();
+
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						if (msg.equals(word))
+						{
+							id2 = 1;
+							for (int i = 0; i < msg.length(); i++)
+							{
+								it_out.print("*");
+							}
+							it_out.println();
+						}
+					}
+
+					id1 = 0;
+				}
+				if (id2 == 0)
+				{
+					if (name.equals(""))
+						it_out.println(msg); // 받은 메세지 각 방에 출력
+					else
+						it_out.println(name + " > " + msg);
+				}
+			} catch (Exception e)
+			{
+				System.out.println("예외:" + e);
+			}
+
+		}
+	}
+
+	// 방 내의 클라이언트들에게 메세지 전달
+	public void sendMsg(String msg, String name, String i)
+	{
+
+		// 해쉬 맵과 이터레이터를 이용해서 출력스트림을 순차적으로 얻어와서 해당 메시지를 각방에 출력한다.
+
+		Iterator<String> it = roomN.get(i).keySet().iterator();
+		String sql,word,query,next = null;
+		ResultSet rs = null;
+		PreparedStatement pstmt2 = null;
+		PreparedStatement pstmt3 = null;
+		int chk,id1,id2 = 0;
+		while (it.hasNext())
+		{
+			chk = 0;
+			id2 = 0;
+			try
+			{
+				next = it.next();
+				if (!next.equals(name))
+				{
+
+					PrintWriter it_out = (PrintWriter) roomN.get(i).get(next);
+
+					sql = "select * from B_id";
+					pstmt2 = con.prepareStatement(sql);
+					rs = pstmt2.executeQuery();
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						if (msg.equals(word))
+						{
+							chk = 1;
+							for (int j = 0; j < word.length(); j++)
+							{
+								it_out.print("*");
+							}
+							it_out.println();
+							break;
+						}
+					}
+
+					if (chk == 1)
+						continue;
+
+					sql = "select * from " + next;
+					pstmt2 = con.prepareStatement(sql);
+					rs = pstmt2.executeQuery();
+
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						if (msg.equals(word))
+						{
+							id2 = 1;
+							for (int j = 0; j < msg.length(); j++)
+							{
+								it_out.print("*");
+							}
+							it_out.println();
+							break;
+						}
+					}
+
+					if (id2 == 1)
+						continue;
+
+					if (name.equals(""))
+						it_out.println(msg); // 받은 메세지 각 방에 출력
+					else
+						it_out.println(name + " > " + msg);
+
+				}
+			} catch (Exception e)
+			{
+				System.out.println("예외:" + e);
+			}
+
+		}
+	}
+	class MultiServerT extends Thread
+	{
+		Socket socket;
+		PrintWriter out = null;
+		BufferedReader in = null;
+		String name = "";
+		String title = null;
+		String sql1 = null;
+		String sql = null;
+		PreparedStatement pstmt1 = null;
+		PreparedStatement pstmt2 = null;
+		PreparedStatement pstmt3 = null;
+		PreparedStatement pstmt4 = null;
+		ResultSet rs = null;
+
+
+		public MultiServerT(Socket socket)
+		{
+			this.socket = socket;
+			try
+			{
+				out = new PrintWriter(this.socket.getOutputStream(), true);
+				in = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+			} catch (Exception e)
+			{
+				System.out.println("예외:" + e);
+			}
+		}
+		
+//		public void run()
+//		{
+//			int th,type=0;
+//			String s,ss,getmenu = "";		// ss
+//			String id,pw,key=null; 			//아디비번, 키값
+//			Iterator<String> iter = null;
+//			out.println("--------------"); // 대기방
+//			out.println("ㅣ---대기방---ㅣ"); // 대기방
+//			out.println("--------------"); // 대기방
+//			try
+//			{
+//				name = in.readLine();
+//				System.out.println("[" + name + "]님이 대화방에 입장하셨습니다.");
+//				sendAllMsg(name + "님이 입장하셨습니다.", "");
+//				clientMap.put(name, out);
+//				System.out.println("현재 접속자 수는 " + clientMap.size() + "명 입니다.");
+//				out.println("(/*) <- command list");
+//				out.println("(/q, /Q) <- 나가기");
+//				while (in != null)
+//				{
+//					s = in.readLine();
+//					if (s.equals("q") || s.equals("Q"))
+//						break;
+//
+//					System.out.println(name + " > " + s);
+//					if (s.equals("/list"))
+//						list(out);
+//					else
+//						sendAllMsg(s, name);
+//				}
+//				System.out.println("쓰레드 종료.");
+//			} catch (Exception e)
+//			{
+//				System.out.println("예외:" + e);
+//			} finally
+//			{
+//				clientMap.remove(name);
+//				sendAllMsg(name + "님이 퇴장하셨습니다.", "");
+//				System.out.println("현재 접속자 수는 " + clientMap.size() + "명 입니다.");
+//				try
+//				{
+//					in.close();
+//					out.close();
+//					socket.close();
+//				} catch (Exception e)
+//				{
+//					e.printStackTrace();
+//				}
+//			}
+//		}
+		public void run()
+		{
+			int type = 0;
+			String s = "";
+			String id = null; // 아이디
+			String pw = null; // 비밀번호
+			int th = 0;
+			Iterator<String> iter = null;
+			String ss = "";
+			String key = null;
+			String getMenu = "";
+
+			out.println("==대기실==");
+			out.println();
+
+			try
+			{
+				String pw1 = null; // 비밀번호 비교에 사용
+				int ld = 0;
+				while (true)
+				{
+
+					ld = 0;
+					out.println("관리자 로그인은 /adlogin을 입력해주세요");
+					out.println("=============================================");
+					out.println("메뉴를 선택하세요");
+					out.println("1. 로그인  2. 회원가입 3. 회원탈퇴");
+					out.println("=============================================");
+
+					try
+					{
+						getMenu = in.readLine();
+
+					} catch (IOException e)
+					{
+
+					}
+
+					if (getMenu.equals("/adlogin"))
+					{
+						out.println("<<관리자 페이지입니다>> \n 비밀번호를 입력해주세요");
+						pw = in.readLine();
+						sql = "select pw from chatuser where id = ?";
+						pstmt1 = con.prepareStatement(sql);
+						pstmt1.setString(1, "head");
+						rs = pstmt1.executeQuery();
+
+						while (rs.next())
+						{
+							pw1 = rs.getString(1);
+							if (pw.equals(pw1))
+							{
+								out.println("환영합니다 관리자님");
+								adlogin(in, out);
+							} else
+							{
+								out.println("비밀번호가 틀렸습니다.");
+							}
+							break;
+						}
+					} else
+					{
+
+						type = Integer.parseInt(getMenu);
+						// 로그인
+						if (type == 1)
+						{
+
+							int id1 = 0;
+							String id11 = null;
+
+							out.println("<<로그인>>");
+							out.println("id");
+							try
+							{
+								id = in.readLine();
+
+								if (id.equals("back"))
+									continue;
+								sql = "select pw from chatuser where id = ?";
+								pstmt2 = con.prepareStatement(sql);
+								pstmt2.setString(1, id);
+								rs = pstmt2.executeQuery();
+								while (rs.next())
+								{
+									id1 = Integer.parseInt(rs.getString(1));
+								}
+								if (id1 == 0)
+								{
+									out.println("존재하지 않는 아이디 입니다.");
+									continue;
+								}
+
+								sql = "select utype from chatuser where id = ?";
+								pstmt1 = con.prepareStatement(sql);
+								pstmt1.setString(1, id);
+								rs = pstmt1.executeQuery();
+
+								while (rs.next())
+								{
+									int utype = Integer.parseInt(rs.getString(1));
+									if (utype == 1)
+									{
+										out.println("로그인이 금지된 아이디입니다.");
+										ld = 1;
+									}
+								}
+
+							} catch (IOException e1)
+							{
+								e1.printStackTrace();
+							}
+							if (ld == 1)
+								continue;
+
+							id1 = 0;
+							Iterator<String> at = clientMap.keySet().iterator();
+							while (at.hasNext())
+							{
+								id11 = (String) at.next();
+								if (id.equals(id11))
+								{
+									id1 = 1;
+									break;
+								}
+							}
+							if (id1 == 1)
+							{
+								out.println("이미 활동중인 아이디입니다.");
+							} else
+							{
+								out.println("pw ");
+								try
+								{
+									pw = in.readLine();
+								} catch (IOException e1)
+								{
+
+								}
+
+								try
+								{
+									try
+									{
+										sql = "select pw from chatuser where id = ?";
+										pstmt1 = con.prepareStatement(sql);
+										pstmt1.setString(1, id);
+										rs = pstmt1.executeQuery();
+
+										while (rs.next())
+										{
+											pw1 = rs.getString(1);
+										}
+									} catch (SQLException sqle)
+									{
+
+										System.out.println("sql문 오류");
+									}
+
+									if (pw.equals(pw1))
+									{
+										clientMap.put(id, out);
+										waitUser.put(id, out);
+										out.println("로그인에 성공했습니다");
+										Thread mst = new MultiServer2(socket, id, title); // 쓰레드 생성(대화방 입장 알림, 대화)
+										th = 1;
+										mst.start();
+										mst.join();
+										continue;
+									} else
+									{
+										out.println("로그인에 실패했습니다");
+									}
+								} finally
+								{
+									try
+									{
+										if (rs != null)
+											rs.close();
+										if (pstmt1 != null)
+											pstmt1.close();
+										if (pstmt2 != null)
+											pstmt2.close();
+									} catch (SQLException sqle)
+									{
+									}
+								}
+							}
+						}
+
+						// 회원가입
+						else if (type == 2)
+						{
+							try
+							{
+								out.println("<<회원가입>>");
+								int id1 = 0;
+
+								while (true)
+								{
+
+									out.println("id: ");
+									id = in.readLine();
+
+									try
+									{
+										if (id.equals("back"))
+											break;
+										sql = "select count(*) from chatuser where id = ?";
+										pstmt2 = con.prepareStatement(sql);
+										pstmt2.setString(1, id);
+										rs = pstmt2.executeQuery();
+										while (rs.next())
+										{
+											id1 = Integer.parseInt(rs.getString(1));
+										}
+										if (id1 == 0)
+										{
+											out.println("pw: ");
+											pw = id = in.readLine();
+											sql = "insert into chatuser(id, pw, utype) values(?, ?, 0)";
+											pstmt3 = con.prepareStatement(sql);
+											pstmt3.setString(1, id);
+											pstmt3.setString(2, pw);
+											rs = pstmt3.executeQuery();
+
+											// 개인 금칙어 테이블 생성
+											String strQuery = "create table $tableName (wordd varchar(10) )";
+											String query = strQuery.replace("$tableName", id);
+											pstmt4 = con.prepareStatement(query);
+											rs = pstmt4.executeQuery();
+
+											out.println("회원가입 되었습니다.");
+											break;
+
+										} else
+										{
+											out.println("이미 존재하는 아이디입니다.");
+											break;
+										}
+
+									} catch (SQLException sqle)
+									{
+										sqle.printStackTrace();
+									} finally
+									{
+										try
+										{
+											if (rs != null)
+												rs.close();
+											if (pstmt2 != null)
+												pstmt2.close();
+											if (pstmt3 != null)
+												pstmt3.close();
+										} catch (SQLException sqle)
+										{
+										}
+
+									}
+								}
+								// break;
+							} catch (IOException e)
+							{
+
+							}
+						}
+						// 회원탈퇴
+						else if (type == 3)
+						{
+							int id1 = 0;
+							out.println("<<회원 탈퇴>>");
+							out.println("id: ");
+							id = in.readLine();
+
+							if (id.equals("back"))
+								continue;
+
+							sql = "select count(*) from chatuser where id = ?";
+							pstmt2 = con.prepareStatement(sql);
+							pstmt2.setString(1, id);
+							rs = pstmt2.executeQuery();
+							while (rs.next())
+							{
+								id1 = Integer.parseInt(rs.getString(1));
+							}
+							if (id1 == 0)
+							{
+								out.println("존재하지 않는 아이디 입니다.");
+								continue;
+							}
+							out.println("pw: ");
+							pw = in.readLine();
+
+							sql = "select pw from chatuser where id = ?";
+							pstmt1 = con.prepareStatement(sql);
+							pstmt1.setString(1, id);
+							rs = pstmt1.executeQuery();
+
+							while (rs.next())
+							{
+								pw1 = rs.getString(1);
+							}
+
+							if (pw.equals(pw1))
+							{
+
+								out.println("정말 탈퇴하시겠습니까? Y/N");
+								String o = in.readLine();
+								if (o.equals("Y") || o.equals("y"))
+								{
+									sql = "delete from chatuser where id = ?";
+									pstmt3 = con.prepareStatement(sql);
+									pstmt3.setString(1, id);
+									rs = pstmt3.executeQuery();
+
+									sql = "drop table " + id;
+									pstmt4 = con.prepareStatement(sql);
+
+									rs = pstmt4.executeQuery();
+									out.println("탈퇴되었습니다.");
+									continue;
+								}
+							}
+						} else
+						{
+							System.out.println(" 메뉴를 다시 선택하세요");
+						}
+					}
+				}
+			} catch (Exception e)
+			{
+				System.out.println("예외1:" + e);
+			} finally
+			{
+				// 예외가 발생할때 퇴장. 해쉬맵에서 해당 데이터 제거.
+				// 보통 종료하거나 나가면 java.net.SocketException: 예외발생
+				if (th == 0)
+				{
+					clientMap.remove(name);
+					sendAllMsg(name + "님이 퇴장하셨습니다.", "");
+					System.out.println("00현재 접속자 수는 " + clientMap.size() + "명 입니다.");
+				}
+
+				try
+				{
+					serverSocket.close();
+					in.close();
+					out.close();
+				} catch (Exception e)
+				{
+
+				}
+			}
+		}
+
+	}
+
+////////////////////////////////////////////////////////////////////////////////////
+///////로그인 이후 방입장 단계
+	class MultiServer2 extends Thread
+	{
+
+		Socket socket;
+		String title = null;
+		PrintWriter out = null;
+		BufferedReader in = null;
+		String id = "";
+		String pw = null;
+
+		// 생성자
+		public MultiServer2(Socket socket, String name, String title)
+		{
+			this.socket = socket;
+			this.id = name;
+			this.title = title;
+			try
+			{
+				out = new PrintWriter(socket.getOutputStream(), true);
+				in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			} catch (Exception e)
+			{
+
+			}
+		}
+
+		// 귓속말
+		public void secretMsg(String msg, String name, String nameto, String i)
+		{
+
+			PrintWriter p = null;
+			try
+			{
+				p = (PrintWriter) roomN.get(i).get(nameto);
+				if (name.equals(""))
+					p.println(msg); // 받은 메세지 각 방에 출력
+				else
+					p.println(name + "(귓속말) > " + msg);
+			} catch (Exception e)
+			{
+
+			}
+
+		}
+		
+		public void sendAllMsg(String msg, String name)
+		{
+			Iterator<String> it = clientMap.keySet().iterator();
+			while (it.hasNext())
+			{
+				try
+				{
+					PrintWriter it_out = (PrintWriter) clientMap.get(it.next());
+					if (name.equals(""))
+					{
+						it_out.println(msg);
+					} else
+					{
+						it_out.println(name + " > " + msg);
+					}
+				} catch (Exception e)
+				{
+					System.out.println("예외:" + e);
+				}
+			}
+		}
+
+	}
+}

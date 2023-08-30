@@ -1,0 +1,464 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.sql.*;
+
+public class MultiServer
+{
+	static ServerSocket serverSocket = null;
+	static Socket socket = null;
+	static Connection con;
+	Map<String, String> listw;
+	Map<String, String> inviteM;
+	Map<String, PrintWriter> waitUser; // 대기방 사용자
+	Map<String, PrintWriter> clientMap; // 사용자 아이디와 출력할 내용 -- 대기실용 해시맵
+	Map<String, Map<String, PrintWriter>> roomN; // 공개방 해시맵
+	Map<String, Map<String, PrintWriter>> roomP; // 비밀방
+	Map<String, Integer> capa; // 각방의 정원
+	Map<String, String> pwd; // 비밀방의 비밀번호
+
+	public MultiServer()
+	{
+		inviteM = new HashMap<String, String>();
+		waitUser = new HashMap<String, PrintWriter>();
+		clientMap = new HashMap<String, PrintWriter>();
+		roomN = new HashMap<String, Map<String, PrintWriter>>();
+		capa = new HashMap<String, Integer>();
+		pwd = new HashMap<String, String>();
+		listw = new HashMap<String, String>();
+		Collections.synchronizedMap(clientMap);
+		
+		listw.put("/list", "모든 사용자 리스트");
+		listw.put("/waituser", "대기방 유저 리스트");
+		listw.put("/rlist", "채팅방 리스트 출력");
+		listw.put("/adword", "개인 금칙어 설정 추가");
+		listw.put("/delword", "개인 설정 금칙어 삭제");
+		listw.put("/agree", "채팅방 초대 수락 명령어");
+		
+		// 해쉬맵 동기화 설정.
+		Collections.synchronizedMap(inviteM);
+		Collections.synchronizedMap(waitUser);
+		Collections.synchronizedMap(roomN);
+		Collections.synchronizedMap(clientMap);
+		Collections.synchronizedMap(capa);
+		Collections.synchronizedMap(pwd);
+
+	}
+
+	public void init()
+	{
+		try
+		{
+			serverSocket = new ServerSocket(9999);
+			System.out.println("서버가 시작되었습니다.");
+
+			while (true)
+			{
+				socket = serverSocket.accept();
+				System.out.println(socket.getInetAddress() + ":" + socket.getPort());
+
+				Thread msr = new MultiServerT(socket);
+				msr.start();
+			}
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		} finally
+		{
+			try
+			{
+				serverSocket.close();
+			} catch (Exception e)
+			{
+				e.printStackTrace();
+			}
+		}
+	}
+	// 사용자 리스트
+	public void list(PrintWriter out)
+	{
+		Iterator<String> it = clientMap.keySet().iterator();
+		String msg = "사용자리스트 [";
+		while (it.hasNext())
+		{
+			msg += (String) it.next() + ",";
+		}
+		msg = msg.substring(0, msg.length() - 1) + "]";
+		try
+		{
+			out.println(msg); // 대기 리스트 출력
+		} catch (Exception e)
+		{
+		}
+	}
+	// 대기방 사용자 리스트
+	public void waitU(PrintWriter out)
+	{
+		Iterator<String> it = waitUser.keySet().iterator();
+		String msg = "대기방 사용자 리스트 [";
+		while (it.hasNext())
+		{
+			msg += (String) it.next() + ",";
+		}
+		msg = msg.substring(0, msg.length() - 1) + "]";
+
+		try
+		{
+			out.println(msg); // 리스트 출력
+		} catch (Exception e)
+		{
+		}
+	}
+	// 해당방 사용자
+		public void userR(String title, PrintWriter out)
+		{
+			Iterator<String> it = roomN.get(title).keySet().iterator();
+			String msg = title + "방 사용자 리스트 [";
+			while (it.hasNext())
+			{
+				msg += (String) it.next() + ",";
+			}
+			msg = msg.substring(0, msg.length() - 1) + "]";
+
+			try
+			{
+				out.println(msg); // 리스트 출력
+			} catch (Exception e)
+			{
+			}
+		}
+
+	public static void main(String[] args)
+	{
+		Connection conn = null;
+		Statement stmt = null;
+		
+		try
+		{
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+//			System.out.println("오라클 드라이버됨"); //확인용
+			String url = ("jdbc:oracle:thin:@localhost:1521:xe");
+			String user = ("mchat");
+			String password = ("123");
+			
+			conn = DriverManager.getConnection(url,user,password);
+//			System.out.println("conn ="+conn); // 확인용
+			
+			stmt = conn.createStatement();
+			StringBuffer sql = new StringBuffer();
+		}catch(ClassNotFoundException e){
+			System.out.println("오라클 드라이버 클래스를 못찾음");
+		} 
+		catch (SQLException e)
+		{
+			System.out.println("sql오류"+e.getMessage());
+		}finally {
+			try
+			{
+				if(stmt != null) stmt.close();
+				if(conn != null) conn.close();
+			} catch (Exception e)
+			{
+			}
+		}
+		
+		
+
+//		try
+//		{
+//			con = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521:xe", "mchat", "123");
+//		} catch (SQLException sqle)
+//		{
+//			System.out.println("sqlㅗㅇㄹㅠ");
+//		}
+		MultiServer ms = new MultiServer();
+		ms.init();
+	}
+	// 접속된 모든 클라이언트들에게 메세지를 전달
+	public void sendAllMsg(String msg, String name)
+	{
+
+		PreparedStatement pstmt2 = null;
+		String sql = null;
+		ResultSet rs = null;
+		String key = null;
+		String word = null;
+		String query = null;
+		int chk = 0;
+		int id2 = 0;
+		int id1 = 0;
+
+		// 해쉬 맵과 이터레이터를 이용해서 출력스트림을 순차적으로 얻어와서 해당 메시지를 각방에 출력한다.
+		Iterator<String> it = clientMap.keySet().iterator();
+
+		while (it.hasNext())
+		{
+			chk = 0;
+			id2 = 0;
+			try
+			{
+				key = it.next();
+				PrintWriter it_out = (PrintWriter) clientMap.get(key);
+				sql = "select * from blackword";
+				pstmt2 = con.prepareStatement(sql);
+				rs = pstmt2.executeQuery();
+				while (rs.next())
+				{
+					word = rs.getString(1);
+					if (msg.contains(word))
+					{
+						chk = 1;
+						for (int i = 0; i < msg.length(); i++)
+						{
+							it_out.print("*");
+						}
+						it_out.println();
+						break;
+					}
+				}
+
+				sql = "select count(*) from $tablename";
+				query = sql.replace("$tableName", key);
+				pstmt2 = con.prepareStatement(query);
+				rs = pstmt2.executeQuery();
+				while (rs.next())
+				{
+					id1 = Integer.parseInt(rs.getString(1));
+				}
+
+				if (id1 > 0)
+				{
+					sql = "select * from $tablename";
+					query = sql.replace("$tableName", key);
+					pstmt2 = con.prepareStatement(query);
+					rs = pstmt2.executeQuery();
+
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						if (msg.equals(word))
+						{
+							id2 = 1;
+							for (int i = 0; i < msg.length(); i++)
+							{
+								it_out.print("*");
+							}
+							it_out.println();
+						}
+					}
+
+					id1 = 0;
+				}
+				if (id2 == 0)
+				{
+					if (name.equals(""))
+						it_out.println(msg); // 받은 메세지 각 방에 출력
+					else
+						it_out.println(name + " > " + msg);
+				}
+			} catch (Exception e)
+			{
+				System.out.println("예외:" + e);
+			}
+
+		}
+	}
+
+	// 방 내의 클라이언트들에게 메세지 전달
+	public void sendMsg(String msg, String name, String i)
+	{
+
+		// 해쉬 맵과 이터레이터를 이용해서 출력스트림을 순차적으로 얻어와서 해당 메시지를 각방에 출력한다.
+
+		Iterator<String> it = roomN.get(i).keySet().iterator();
+		String sql,word,query,next = null;
+		ResultSet rs = null;
+		PreparedStatement pstmt2 = null;
+		PreparedStatement pstmt3 = null;
+		int chk,id1,id2 = 0;
+		while (it.hasNext())
+		{
+			chk = 0;
+			id2 = 0;
+			try
+			{
+				next = it.next();
+				if (!next.equals(name))
+				{
+
+					PrintWriter it_out = (PrintWriter) roomN.get(i).get(next);
+
+					sql = "select * from B_id";
+					pstmt2 = con.prepareStatement(sql);
+					rs = pstmt2.executeQuery();
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						if (msg.equals(word))
+						{
+							chk = 1;
+							for (int j = 0; j < word.length(); j++)
+							{
+								it_out.print("*");
+							}
+							it_out.println();
+							break;
+						}
+					}
+
+					if (chk == 1)
+						continue;
+
+					sql = "select * from " + next;
+					pstmt2 = con.prepareStatement(sql);
+					rs = pstmt2.executeQuery();
+
+					while (rs.next())
+					{
+						word = rs.getString(1);
+						if (msg.equals(word))
+						{
+							id2 = 1;
+							for (int j = 0; j < msg.length(); j++)
+							{
+								it_out.print("*");
+							}
+							it_out.println();
+							break;
+						}
+					}
+
+					if (id2 == 1)
+						continue;
+
+					if (name.equals(""))
+						it_out.println(msg); // 받은 메세지 각 방에 출력
+					else
+						it_out.println(name + " > " + msg);
+
+				}
+			} catch (Exception e)
+			{
+				System.out.println("예외:" + e);
+			}
+
+		}
+	}
+	class MultiServerT extends Thread
+	{
+		Socket socket;
+		PrintWriter out = null;
+		BufferedReader in = null;
+		String name = "";
+
+		public MultiServerT(Socket socket)
+		{
+			this.socket = socket;
+			try
+			{
+				out = new PrintWriter(this.socket.getOutputStream(), true);
+				in = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+			} catch (Exception e)
+			{
+				System.out.println("예외:" + e);
+			}
+		}
+
+		public void run()
+		{
+			int th,type=0;
+			String s,ss,getmenu = "";		// ss
+			String id,pw,key=null; 			//아디비번, 키값
+			Iterator<String> iter = null;
+			out.println("--------------"); // 대기방
+			out.println("ㅣ---대기방---ㅣ"); // 대기방
+			out.println("--------------"); // 대기방
+			try
+			{
+				name = in.readLine();
+				System.out.println("[" + name + "]님이 대화방에 입장하셨습니다.");
+				sendAllMsg(name + "님이 입장하셨습니다.", "");
+				clientMap.put(name, out);
+				System.out.println("현재 접속자 수는 " + clientMap.size() + "명 입니다.");
+				out.println("(/*) <- command list");
+				while (in != null)
+				{
+					s = in.readLine();
+					if (s.equals("q") || s.equals("Q"))
+						break;
+
+					System.out.println(name + " > " + s);
+					if (s.equals("/list"))
+						list(out);
+					else
+						sendAllMsg(s, name);
+				}
+				System.out.println("쓰레드 종료.");
+			} catch (Exception e)
+			{
+				System.out.println("예외:" + e);
+			} finally
+			{
+				clientMap.remove(name);
+				sendAllMsg(name + "님이 퇴장하셨습니다.", "");
+				System.out.println("현재 접속자 수는 " + clientMap.size() + "명 입니다.");
+				try
+				{
+					in.close();
+					out.close();
+					socket.close();
+				} catch (Exception e)
+				{
+					e.printStackTrace();
+				}
+			}
+		}
+		// 귓속말
+		public void secretMsg(String msg, String name, String nameto, String i)
+		{
+
+			PrintWriter p = null;
+			try
+			{
+				p = (PrintWriter) roomN.get(i).get(nameto);
+				if (name.equals(""))
+					p.println(msg); // 받은 메세지 각 방에 출력
+				else
+					p.println(name + "(귓속말) > " + msg);
+			} catch (Exception e)
+			{
+
+			}
+
+		}
+
+		public void sendAllMsg(String msg, String name)
+		{
+			Iterator<String> it = clientMap.keySet().iterator();
+			while (it.hasNext())
+			{
+				try
+				{
+					PrintWriter it_out = (PrintWriter) clientMap.get(it.next());
+					if (name.equals(""))
+					{
+						it_out.println(msg);
+					} else
+					{
+						it_out.println(name + " > " + msg);
+					}
+				} catch (Exception e)
+				{
+					System.out.println("예외:" + e);
+				}
+			}
+		}
+
+	}
+}
